@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Service Center</title>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link href="https://fonts.googleapis.com/css2?family=K2D:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ==================== LOGIN BOX ==================== -->
+<div class="card" id="loginBox">
+  <div style="text-align:center;margin-bottom:15px;">
+    <img src="https://lh3.googleusercontent.com/d/1nqE6yoPcLuZ3orMnAfyQBcVWrPXdYpGY" alt="FMO Logo" style="width:100px;height:auto;object-fit:contain;">
+  </div>
+  <div style="text-align:center;margin:0 0 10px 0;color:#2c3e50;font-size:1.0rem;font-weight:bold;">
+    ระบบแจ้งปัญหาและขอใช้บริการสารสนเทศ อสป.<br>
+    <span style="font-size:0.8rem;color:#6c757d;font-weight:500;">IT Tickets & Request Systems</span>
+  </div>
+  <div style="text-align:center;margin-bottom:20px;color:#0056b3;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:5px;">
+    <span>🔐</span><span style="border-bottom:2px solid #0056b3;padding-bottom:2px;">เข้าสู่ระบบ</span>
+  </div>
+  <label>ชื่อผู้ใช้งาน</label>
+  <input id="username" placeholder="name.r">
+  <label>รหัสผ่าน</label>
+  <div style="position:relative;margin-bottom:10px;">
+    <input type="password" id="password" placeholder="password" style="width:100%;padding-right:40px;margin-bottom:0!important;">
+    <i class="fa-solid fa-eye" id="togglePasswordIcon" onclick="togglePassword()" style="position:absolute;right:12px;top:11px;cursor:pointer;color:#888;font-size:14px;" title="แสดง/ซ่อนรหัสผ่าน"></i>
+  </div>
+  <button id="btnLogin" class="btn-primary" onclick="login()">เข้าสู่ระบบ</button>
+  <div style="text-align:center;margin-top:8px;">
+    <a href="#" onclick="showForgotPassword()" style="font-size:13px;color:#0056b3;text-decoration:none;font-weight:bold;">🔑 ลืมรหัสผ่าน?</a>
+  </div>
+  <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+  <div class="text-center">
+    <label style="font-weight:normal;font-size:13px;color:#e06666;">สำหรับพนักงานใหม่เท่านั้น!</label>
+    <button class="btn-secondary" onclick="switchView('newUserBox')" style="margin-top:5px;">✨ ขอสิทธิ์เข้าใช้งานระบบ (พนักงานใหม่เท่านั้น)</button>
+  </div>
+  <div style="text-align:center;color:rgba(255,255,255,0.75);font-size:12px;font-weight:300;padding:20px 0;letter-spacing:0.5px;text-shadow:1px 1px 3px rgba(0,0,0,0.5);">
+    © 2026 สำนักงานเทคโนโลยีสารสนเทศ อสป.
+  </div>
+</div>
+
+<!-- ==================== NEW USER BOX ==================== -->
+<div class="card hidden" id="newUserBox" style="padding:20px 30px;max-width:450px;margin:0 auto;">
+  <h3 style="margin-bottom:15px;margin-top:0;text-align:center;">✨ ขอสิทธิ์เข้าใช้งาน (พนักงานใหม่)</h3>
+  <div style="margin-bottom:10px;">
+    <label style="display:block;margin-bottom:3px;font-size:13px;">ชื่อ-นามสกุล (ไทย) <span class="required">*</span></label>
+    <input id="new_name" placeholder="ระบุชื่อ-ไทย" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;box-sizing:border-box;">
+  </div>
+  <div style="margin-bottom:10px;">
+    <label style="display:block;margin-bottom:3px;font-size:13px;">ชื่อ-นามสกุล (อังกฤษ) <span class="required">*</span></label>
+    <input id="new_name_en" placeholder="Full Name (EN)" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;box-sizing:border-box;">
+  </div>
+  <div style="margin-bottom:10px;">
+    <label style="display:block;margin-bottom:3px;font-size:13px;">หน่วยงาน / แผนก <span class="required">*</span></label>
+    <input id="new_dept" placeholder="ระบุหน่วยงาน" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;box-sizing:border-box;">
+  </div>
+  <label style="display:block;margin-bottom:3px;font-size:13px;">ระบบที่ต้องการขอสิทธิ์ <span class="required">*</span></label>
+  <div style="background:#fdfdfd;border:1px solid #ddd;padding:12px;border-radius:8px;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;margin-bottom:6px;">
+      <input type="checkbox" id="check_email" style="width:14px;height:14px;cursor:pointer;" checked>
+      <label for="check_email" style="margin-left:10px;font-size:13px;cursor:pointer;">📧 e-Mail องค์กร</label>
+    </div>
+    <div style="display:flex;align-items:center;margin-bottom:6px;">
+      <input type="checkbox" id="check_systems" onchange="toggleSystemInput()" style="width:14px;height:14px;cursor:pointer;">
+      <label for="check_systems" style="margin-left:10px;font-size:13px;cursor:pointer;">🖥️ Systems ระบบงาน</label>
+    </div>
+    <div id="system_name_container" style="display:none;margin-top:5px;">
+      <input type="text" id="new_system_detail" placeholder="ระบุชื่อระบบงาน..." style="width:100%;padding:6px;font-size:12px;border:1px solid #007bff;border-radius:4px;box-sizing:border-box;">
+    </div>
+  </div>
+  <div style="margin-bottom:10px;">
+    <label style="display:block;margin-bottom:3px;font-size:13px;">เหตุผลความจำเป็น / ชื่อระบบงาน / สิทธิ์การเข้าถึง<span class="required">*</span></label>
+    <textarea id="new_detail" placeholder="ระบุเหตุผล..." style="width:100%;height:60px;padding:8px;border:1px solid #ccc;border-radius:5px;box-sizing:border-box;"></textarea>
+  </div>
+  <div style="margin-bottom:12px;">
+    <label style="display:block;margin-bottom:3px;font-size:13px;">อีเมลสำรองสำหรับแจ้งเตือน <span class="required">*</span></label>
+    <input id="new_email" type="email" placeholder="example@gmail.com" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;box-sizing:border-box;">
+  </div>
+  <div style="margin-bottom:10px;">
+    <label style="display:block;margin-bottom:3px;font-size:13px;">อีเมลหัวหน้างาน <span class="required">*</span></label>
+    <input id="new_manager_email" type="email" placeholder="manager@fishmarket.co.th" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;box-sizing:border-box;">
+  </div>
+  <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:15px;background:#f0f7ff;padding:10px;border-radius:6px;border:1px solid #d1e7ff;">
+    <input type="checkbox" id="pdpa_check" style="width:12px;height:12px;margin-top:2px;">
+    <label for="pdpa_check" style="font-size:11px;color:#444;line-height:1.4;">ฉันยินยอมให้จัดเก็บและใช้ข้อมูลส่วนบุคคลนี้ เพื่อใช้ในการพิสูจน์ตัวตนและสิทธิ์ในการเข้าถึงระบบงานตามนโยบาย PDPA ขององค์กร <span class="required">*</span></label>
+  </div>
+  <button class="btn-primary" id="btnSubmitNew" onclick="submitNewUser(event)">ส่งคำขอเปิดสิทธิ์</button>
+  <button class="btn-secondary" onclick="switchView('loginBox')" style="width:100%;margin-top:8px;padding:6px;font-size:12px;border:none;background:none;color:#666;text-decoration:underline;cursor:pointer;">⬅️ กลับไปหน้าเข้าสู่ระบบ</button>
+</div>
+
+<!-- ==================== USER BOX ==================== -->
+<div class="card hidden" id="userBox" style="width:85%!important;max-width:480px!important;margin:40px auto!important;padding:20px 25px!important;box-sizing:border-box!important;border-radius:12px!important;position:relative;">
+  <button id="switch-to-admin-btn" class="btn-primary" style="display:none;position:absolute;top:20px;right:20px;width:auto;padding:6px 15px;font-size:13px;border-radius:20px;background:#ffab91!important;z-index:10;" onclick="toggleAdminUserView()">
+    <i class="fa-solid fa-retweet me-1"></i> <span id="switch-user-text">สลับ Admin</span>
+  </button>
+  <h3>📌 แจ้งงาน IT Support</h3>
+  <p class="text-center" style="color:green;font-weight:bold;">👤 ผู้ใช้งาน: <span id="displayUser"></span></p>
+  <div style="background:#f8f9fa;border:1px solid #e2e6ea;border-radius:8px;padding:15px;margin-bottom:20px;">
+    <h4 style="margin-top:0;margin-bottom:10px;color:#0056b3;font-size:14px;">📋 สถานะเคสของคุณ</h4>
+    <div id="userTicketList" style="font-size:13px;color:#555;"></div>
+    <button id="btnShowForm" class="btn-secondary" style="margin-top:15px;display:none;" onclick="toggleTicketForm(true)">➕ ขอเปิดเคสเพิ่ม</button>
+  </div>
+  <div id="ticketFormSection">
+    <label>ประเภทบริการ <span class="required">*</span></label>
+    <select id="user_type">
+      <option value="แจ้งปัญหา/แจ้งซ่อม">🛠️ แจ้งปัญหา / แจ้งซ่อม</option>
+      <option value="ขอเพิ่มสิทธิ์">🔑 ขอเพิ่มสิทธิ์ระบบ (Add-on)</option>
+    </select>
+    <label>ระบบหรืออุปกรณ์ <span class="required">*</span></label>
+    <input id="user_system" placeholder="เช่น เครื่องพิมพ์ชั้น 2">
+    <label>รายละเอียด <span class="required">*</span></label>
+    <textarea id="user_detail" placeholder="อธิบายปัญหา..."></textarea>
+    <label>อีเมลแจ้งเตือน <span class="required">*</span></label>
+    <input id="user_email" type="email" style="background-color:#e9ecef!important;cursor:not-allowed;" readonly>
+    <!-- ✅ FIX 3: ปุ่มส่งข้อมูล + รีเฟรช บรรทัดเดียวกัน -->
+    <div style="display:flex;gap:10px;margin-bottom:10px;">
+      <button class="btn-primary" id="btnSubmitUser" style="flex:1;margin-bottom:0!important;" onclick="submitUserRequest(event)">ส่งข้อมูล</button>
+      <button class="btn-secondary" style="flex:0 0 auto;width:auto;padding:12px 16px;margin-bottom:0!important;" onclick="loadUserTickets()" title="รีเฟรชสถานะเคส">🔄 รีเฟรช</button>
+    </div>
+  </div>
+  <button class="btn-danger" onclick="logout()">🚪 ออกจากระบบ</button>
+</div>
+
+<!-- ==================== ADMIN BOX ==================== -->
+<div class="card hidden" id="adminBox" style="max-width:800px;position:relative;">
+  <button id="switch-view-btn" class="btn-primary" style="display:none;position:absolute;top:20px;right:20px;width:auto;padding:6px 15px;font-size:13px;border-radius:20px;background:#9575cd!important;z-index:10;" onclick="toggleAdminUserView()">
+    <i class="fa-solid fa-retweet me-1"></i> <span id="switch-text">สลับ User</span>
+  </button>
+  <h3>🛡️ ทีม IT (Admin)</h3>
+  <p class="text-center" style="color:#0056b3;font-weight:bold;">👩‍💻 แอดมิน: <span id="displayAdmin"></span></p>
+
+  <!-- ✅ FIX 2: 4 การ์ด -->
+  <div id="adminSummaryCards" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+    <div class="summary-card" style="background:#fffdf5;border-left:4px solid #ffca28;">
+      <h4>คำขอใหม่</h4>
+      <h2 id="countPending" style="color:#f57f17;">0</h2>
+      <p>รอดำเนินการ</p>
+    </div>
+    <div class="summary-card" style="background:#f5fbff;border-left:4px solid #42a5f5;">
+      <h4>กำลังดำเนินการ</h4>
+      <h2 id="countProgress" style="color:#1565c0;">0</h2>
+      <p>อยู่ระหว่างดำเนินการ</p>
+    </div>
+    <div class="summary-card" style="background:#f4fbf7;border-left:4px solid #81c784;">
+      <h4>เสร็จสิ้น</h4>
+      <h2 id="countCompleted" style="color:#2e7d32;">0</h2>
+      <p>เดือนนี้</p>
+    </div>
+    <div class="summary-card" style="background:#fdf5ff;border-left:4px solid #ba68c8;">
+      <h4>ทั้งหมด</h4>
+      <h2 id="countTotal" style="color:#6a1b9a;">0</h2>
+      <p>Ticket ทั้งหมด</p>
+    </div>
+  </div>
+
+  <div class="desktop-table" style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th style="min-width:100px;">ชื่อผู้แจ้ง</th>
+          <th style="min-width:80px;">คิว</th>
+          <th style="min-width:190px;">รายละเอียด</th>
+          <th style="min-width:120px;">สถานะ/SLA</th>
+          <th style="min-width:180px;">ผู้ดูแล</th>
+          <th style="min-width:100px;">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody id="ticketBody"></tbody>
+    </table>
+  </div>
+  <div id="mobileTicketList" style="display:none;"></div>
+  <div class="admin-action-btns">
+    <button class="btn-primary desktop-btn" onclick="loadAdminTickets()">🔄 รีเฟรชข้อมูล</button>
+    <button class="btn-danger  desktop-btn" onclick="logout()">🚪 ออกจากระบบ</button>
+  </div>
+</div>
+
+<!-- ==================== RESOLUTION MODAL ==================== -->
+<div id="resolutionModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;justify-content:center;align-items:center;">
+  <div class="card" style="width:90%;max-width:360px;margin:auto;">
+    <h3 style="color:#28a745;border-bottom:none;">✅ ยืนยันการปิดงาน</h3>
+    <p class="text-center">ผู้แจ้ง: <span id="modalUserName"></span> | คิว: <span id="modalQueueText"></span></p>
+    <div id="modalDetailBox" style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#555;line-height:1.6;max-height:100px;overflow-y:auto;">
+      <b style="color:#333;">📋 ปัญหา:</b> <span id="modalDetailText" style="white-space:pre-wrap;"></span>
+    </div>
+    <label>วิธีการแก้ไข</label>
+    <textarea id="resolutionInput" placeholder="ระบุสิ่งที่ดำเนินการแก้ไข..."></textarea>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-primary" style="background:#28a745;" onclick="submitCloseTicket()">ปิดงาน</button>
+      <button class="btn-secondary" onclick="document.getElementById('resolutionModal').style.display='none'">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== JAVASCRIPT ==================== -->
+<script src="script.js"></script>
+</body>
+</html>

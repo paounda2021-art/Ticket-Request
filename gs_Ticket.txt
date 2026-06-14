@@ -1,0 +1,722 @@
+const SHEET_ID      = "1T5F5t3qhFiX2XHu6FnKp5W9DXe-tNyOkrW4wq8LDs4c";
+const USER_SHEET    = "Users";
+const TICKET_SHEET  = "Tickets";
+const LINE_OA_TOKEN = "D5MDKikW2/2hl5Ul97+s7Ptg5y5iVjhw5vnEWW3WD3j1U35h1oTvRWsQcoGCUF7iQjbNiv55PmzHIuZ5fVIk2/t2X3AI/5/zzxmzjcj6nJ0yGwQIwHmH5ovPtPNgNUm4+eR7QuxzI22Upz48aLnIeQdB04t89/1O/w1cDnyilFU=";
+const ADMIN_IDS = [
+ "U224e07f4c82a316d48cb2e9e74db5339",  // แอดมินคนที่ 1 (ของคุณรณิดา)
+ "Uc7bb974d8f30bd40825314225dc0cd84"  // แอดมินคนที่ 2
+];
+
+/*function testLine() {
+  sendLineAlert("🧪 ทดสอบการแจ้งเตือน LINE OA");
+}*/
+
+function doGet(e) { 
+  // 1. ตรวจสอบว่ามีการส่งค่า action="approve" มาจากปุ่มในอีเมลหรือไม่
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "";
+  var email = (e && e.parameter && e.parameter.email) ? e.parameter.email : "";
+  if (action === 'approve' && email !== "") {
+    return handleApprovalFromEmail(email);
+  }
+
+  // 2. หากเป็นการเปิดหน้าเว็บปกติ (หรือมีค่า q จากลิงก์เดิม)
+  var q = (e && e.parameter && e.parameter.q) ? e.parameter.q : ""; 
+  var template = HtmlService.createTemplateFromFile('index');
+  template.queueFromUrl = q;
+  
+  return template.evaluate()
+    .setTitle('IT Service Center - FMO')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function doPost(e) {
+  try {
+    const req = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    switch (req.action) {
+      case 'login': return handleLogin(ss, req.username, req.password);
+      case 'request_new_account': return handleNewRequest(ss, req); // 🏁 [ซ่อมแซมเรียบร้อย]: พิมพ์ชื่อฟังก์ชันเต็มๆ ไม่ให้เกิดคอมไพล์เออร์เรอร์แล้วค่ะ
+      case 'create_ticket': return handleCreateTicket(ss, req);
+      case 'list_tickets': return handleListTickets(ss);
+      case 'get_user_tickets': return handleGetUserTickets(ss, req.username);
+      case 'update_status': return handleUpdateStatus(ss, req.queue, req.newStatus, req.resolution, req.adminName);
+      case 'forgot_password': return handleForgotPassword(ss, req);
+      // 🚀 ท่อ API ดักตรวจคิวประเมินที่ค้างอยู่ (ช่อง I เสร็จสิ้น และ L ว่าง)
+      case 'send_ticket_email': return sendTicketEmail(req);
+      case 'get_stats': return handleGetStats(ss);
+      case 'check_rating': 
+        var resultRating = checkPendingRating(req.username); 
+        return out(resultRating); 
+      case 'get_ticket_detail': 
+        var resultDetail = getTicketDetail(req.queue); 
+        return out(resultDetail);
+      case 'submit_rating': var resultSubmit = handleSubmitRating(req.queue, req.rating, req.comment);
+
+      return out({ status: resultSubmit });
+        
+      default: return out({ status: 'fail' });
+    }
+  } catch (error) { return out({ status: 'error', message: error.message }); }
+}
+
+// ==========================================
+// 🔒 ฟังก์ชันตรวจคิวประเมินค้าง (เช็คคอลัมน์ I เป็นเสร็จสิ้น และคอลัมน์ L ยังว่างเปล่า)
+// ==========================================
+function checkPendingRating(username) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  
+  // ค้นหาชื่อจริงภาษาไทยของ username นี้จากหน้า Users ก่อน
+  const userSheet = ss.getSheetByName(USER_SHEET);
+  const userData = userSheet.getDataRange().getValues();
+  let thaiName = "";
+  
+  for (let i = 1; i < userData.length; i++) {
+  // ✅ trim whitespace และ strip domain suffix ก่อนเทียบ
+  const storedUser = String(userData[i][0]).trim().toLowerCase().replace('@fishmarket.co.th', '');
+  const incomingUser = String(username).trim().toLowerCase().replace('@fishmarket.co.th', '');
+  if (storedUser === incomingUser) {
+    thaiName = String(userData[i][2]).trim();
+    break;
+  }
+}
+
+  // นำชื่อไทยที่ได้ไปสแกนหาตั๋วค้างในหน้า Tickets
+  if (thaiName !== "") {
+    const ticketSheet = ss.getSheetByName(TICKET_SHEET);
+    const ticketData = ticketSheet.getDataRange().getValues();
+    const pending = [];
+
+    // วนลูปเช็คพิกัดคอลัมน์ในตารางจริงของ อสป.
+    for (let i = 1; i < ticketData.length; i++) {
+      const requesterInSheet = String(ticketData[i][1]).trim(); // คอลัมน์ B: ชื่อผู้แจ้งภาษาไทย
+      const queueCode = String(ticketData[i][6]).trim();        // คอลัมน์ G: เลขคิวงาน
+      const status = String(ticketData[i][8]).trim();           // คอลัมน์ I: สถานะเคส
+      const rating = String(ticketData[i][11]).trim();          // คอลัมน์ L: คะแนนประเมินดาว
+
+      // 🎯 ดักจับเงื่อนไข: เป็นชื่อผู้ใช้คนนั้น + ช่อง I เป็นเสร็จสิ้น + ช่อง L เป็นค่าว่าง
+      if (requesterInSheet === thaiName && status === "เสร็จสิ้น" && (rating === "" || rating === null)) {
+        pending.push({ 
+          queue: queueCode,
+          type: String(ticketData[i][3]).trim(),
+          system: String(ticketData[i][4]).trim(),
+          detail: String(ticketData[i][5]).trim()
+        });
+      }
+    }
+    return pending; // ส่งคิวที่ค้างทั้งหมดกลับไปบังคับเด้งป๊อปอัปหน้าบ้าน
+  }
+  return [];
+}
+
+function getTicketDetail(queueNum) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName(TICKET_SHEET);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][6]).trim() === String(queueNum).trim()) { // คอลัมน์ G คือเลขคิว
+      return {
+        queue:  data[i][6],
+        type:   data[i][3],
+        system: data[i][4],
+        detail: data[i][5]
+      };
+    }
+  }
+  return null;
+}
+
+function handleSubmitRating(queueNum, rating, comment) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName(TICKET_SHEET);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][6]).trim() === String(queueNum).trim()) { // ตรวจจับเลขคิวที่คอลัมน์ G
+      
+      // ล็อกพิกัดการเขียนบันทึกข้อมูลให้ลงตรงช่องเป๊ะๆ:
+      sheet.getRange(i + 1, 12).setValue(rating);   // แถวที่ i+1 คอลัมน์ที่ 12 คือคอลัมน์ L (คะแนน)
+      sheet.getRange(i + 1, 13).setValue(comment);  // แถวที่ i+1 คอลัมน์ที่ 13 คือคอลัมน์ M (ข้อเสนอแนะ)
+      
+      SpreadsheetApp.flush(); // บังคับอัปเดตแผ่นชีททันที
+      return "success";
+    }
+  }
+  return "error";
+}
+
+// 🌟 ฟังก์ชันสร้าง Username ดั้งเดิม
+function generateUsername(fullNameEn) {
+  if (!fullNameEn) return "";
+  const parts = fullNameEn.trim().split(/\s+/); 
+  const fname = parts[0].toLowerCase();
+  const lnameInitial = (parts.length > 1) ? parts[parts.length - 1][0].toLowerCase() : "";
+  return lnameInitial ? `${fname}.${lnameInitial}` : fname;
+}
+
+// ฟังก์ชันเสริมอนุมัติสิทธิ์พนักงานใหม่ผ่านลิงก์อีเมล
+function handleApprovalFromEmail(email) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var userSheet = ss.getSheetByName("Users");
+    var data = userSheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === email) {
+        var timestamp = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy HH:mm:ss");
+        userSheet.getRange(i + 1, 8).setValue("หัวหน้าอนุมัติแล้ว: " + timestamp);
+        return HtmlService.createHtmlOutput(
+          `<div style="font-family: Arial, sans-serif; text-align: center; padding: 40px; border: 1px solid #ddd; border-radius: 10px; max-width: 400px; margin: 40px auto;">
+            <h2 style="color: #28a745;">✅ ยืนยันสิทธิ์สำเร็จ</h2>
+            <p>ระบบได้บันทึกการอนุมัติของคุณเรียบร้อยแล้วเมื่อ</p>
+            <p><b>${timestamp}</b></p>
+            <p>ขอบคุณค่ะ</p>
+          </div>`
+        );
+      }
+    }
+    return HtmlService.createHtmlOutput("<h2>❌ ไม่พบข้อมูลผู้ใช้ในระบบ</h2>");
+  } catch (err) {
+    return HtmlService.createHtmlOutput("<h2>❌ เกิดข้อผิดพลาด: " + err.message + "</h2>");
+  }
+}
+
+// ฟังก์ชันเปิดคำขอพนักงานใหม่ (สมัครครั้งแรก)
+function handleNewRequest(ss, req) {
+  const ticketSheet = ss.getSheetByName("Tickets");
+  const userSheet = ss.getSheetByName("Users");
+  const now = new Date();
+  const timestamp = now.toISOString();
+  const queueNum = "Q-" + String(ticketSheet.getLastRow()).padStart(3, '0');
+
+  const initialUsername = generateUsername(req.name_en);
+  const userEmail = initialUsername + "@fishmarket.co.th";
+
+  userSheet.appendRow([
+    initialUsername, "1234", req.name, "user", req.name_en, "ยินยอม", "ใหม่", req.manager_email, userEmail
+  ]);
+
+  ticketSheet.appendRow([
+    timestamp, req.name + " (ผู้ใช้ใหม่)", req.dept, "ขอเปิดสิทธิ์ครั้งแรก", req.system, req.detail, queueNum, req.email, "รอดำเนินการ", "", "", "", "", "", ""
+  ]);
+
+  if (req.email) {
+    MailApp.sendEmail({
+      to: req.email,
+      subject: "ยินดีต้อนรับ! แจ้งข้อมูลการเข้าใช้งานระบบสารสนเทศ อสป.",
+      htmlBody: `
+        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h3 style="color: #0056b3;">แจ้งข้อมูลบัญชีผู้ใช้งานใหม่</h3>
+          <p>ชื่อผู้ใช้งาน (Username): <b>${initialUsername}</b></p>
+          <p>อีเมลองค์กร: <b>${userEmail}</b></p>
+          <p>รหัสผ่านชั่วคราว: <b>1234</b></p>
+          <p style="color: #d9534f;">* แนะนำให้เปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก โดยกด "ลืมรหัสผ่าน" ที่หน้าเข้าสู่ระบบค่ะ</p>
+        </div>`,
+      name: "FMO IT Support"
+    });
+  }
+
+  const lineMsg = 
+    "✨ มีคำขอเปิดสิทธิ์ใหม่ (พนักงานใหม่)!\n" +
+    "🎫 ลำดับคิว: " + queueNum + "\n" +
+    "👤 ชื่อ-นามสกุล: " + req.name + "\n" +
+    "🏢 หน่วยงาน: " + req.dept + "\n" +
+    "🔑 ระบบที่ขอ: " + req.system + "\n" +
+    "📝 เหตุผล: " + req.detail;
+  sendLineAlert(lineMsg);
+
+  const scriptUrl = ScriptApp.getService().getUrl();
+  const approveLink = scriptUrl + "?action=approve&email=" + encodeURIComponent(initialUsername);
+  if (req.manager_email) {
+    try {
+      MailApp.sendEmail({
+        to: req.manager_email,
+        subject: `[ขออนุมัติ] พนักงานใหม่: คุณ ${req.name}`,
+        htmlBody: `
+          <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+            <h3 style="color: #0056b3;">แจ้งขออนุมัติสิทธิ์เข้าใช้งาน</h3>
+            <p>พนักงานใหม่: <b>${req.name}</b></p>
+            <p>ระบบที่ขอ: ${req.system}</p>
+            <hr>
+            <p>หากข้อมูลถูกต้อง โปรดคลิกปุ่มด้านล่างเพื่อยืนยัน:</p>
+            <div style="text-align: center; margin-top: 20px;">
+              <a href="${approveLink}" style="background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">✅ อนุมัติและยืนยันสิทธิ์</a>
+            </div>
+            <p style="font-size: 11px; color: #888; margin-top: 20px;">* ลิงก์นี้จะบันทึกวันเวลาที่ท่านอนุมัติลงในระบบโดยอัตโนมัติ</p>
+          </div>`,
+        name: "FMO IT Support"
+      });
+    } catch (e) { console.error("Error: " + e.message); }
+  }
+
+  const tData = ticketSheet.getDataRange().getValues();
+  tData.shift();
+  const waitingCount = tData.filter(row => row[8] === "รอดำเนินการ").length;
+  return out({ status: 'success', queue: queueNum, waiting: waitingCount });
+}
+
+// ฟังก์ชันสร้างตั๋วเคสแจ้งซ่อมใหม่
+function handleCreateTicket(ss, req) {
+  const ticketSheet = ss.getSheetByName(TICKET_SHEET);
+  const userSheet = ss.getSheetByName(USER_SHEET);
+  const now = new Date();
+  const timestamp = Utilities.formatDate(now, "GMT+7", "dd/MM/yyyy HH:mm:ss");
+  const queueNum = "Q-" + String(ticketSheet.getLastRow()).padStart(3, '0');
+
+  const userData = userSheet.getDataRange().getValues();
+  let thaiName = req.username;
+  for (let i = 1; i < userData.length; i++) {
+    if (String(userData[i][0]).trim() === String(req.username).trim()) {
+      thaiName = userData[i][2]; // คอลัมน์ C: ชื่อไทย
+      break;
+    }
+  }
+
+  ticketSheet.appendRow([
+    timestamp, thaiName, "", req.type, req.system, req.detail, queueNum, req.email, "รอดำเนินการ", "", "", "", "", "", ""
+  ]);
+
+  const lineMsgRepair = 
+    "📌 มีแจ้งซ่อมใหม่จากระบบ IT Request!\n" +
+    "🎫 ลำดับคิว: " + queueNum + "\n" +
+    "👤 ผู้แจ้ง: " + thaiName + "\n" +
+    "🛠️ ประเภท: " + req.type + "\n" +
+    "💻 ระบบ: " + req.system + "\n" +
+    "📝 รายละเอียด: " + req.detail;
+  sendLineAlert(lineMsgRepair);
+
+  const tData = ticketSheet.getDataRange().getValues();
+  tData.shift();
+  const waitingCount = tData.filter(row => row[8] === "รอดำเนินการ").length;
+  return out({ status: 'success', queue: queueNum, waiting: waitingCount });
+}
+
+// ฟังก์ชันอัปเดตสถานะ (แอดมินรับงาน/ปิดงาน) พร้อมคำนวณ SLA
+function handleUpdateStatus(ss, queueNum, newStatus, resolution, adminName) {
+  const ticketSheet = ss.getSheetByName(TICKET_SHEET);
+  const userSheet = ss.getSheetByName(USER_SHEET);
+  const tData = ticketSheet.getDataRange().getValues();
+
+  for (let i = 0; i < tData.length; i++) {
+    if (String(tData[i][6]).trim() === String(queueNum).trim()) {
+      const rowNum = i + 1;
+      ticketSheet.getRange(rowNum, 9).setValue(newStatus);
+      if (resolution) ticketSheet.getRange(rowNum, 10).setValue(resolution);
+      if (adminName) ticketSheet.getRange(rowNum, 11).setValue(adminName);
+
+      if (newStatus === 'เสร็จสิ้น') {
+        const finishTime = new Date();
+        const finishStr = Utilities.formatDate(finishTime, "GMT+7", "dd/MM/yyyy HH:mm:ss");
+        ticketSheet.getRange(rowNum, 14).setValue(finishStr);
+
+        const startValue = ticketSheet.getRange(rowNum, 1).getValue();
+        const parseBackendDate = (val) => {
+          if (!val) return new Date();
+          if (val instanceof Date && !isNaN(val)) return val;
+          const str = String(val).trim();
+          if (str.includes('T')) return new Date(str);
+          if (str.includes('/')) {
+            const parts = str.split(' ');
+            const dateParts = parts[0].split('/');
+            const timeStr = parts.length > 1 ? parts[1] : "00:00:00";
+            let y = dateParts[2], m = dateParts[1], d = dateParts[0];
+            if (dateParts[0].length === 4) {
+              y = dateParts[0]; m = dateParts[1]; d = dateParts[2];
+            }
+            return new Date(`${y}/${m}/${d} ${timeStr}`);
+          }
+          return new Date(str);
+        };
+
+        const startTime = parseBackendDate(startValue);
+        const diffMs = finishTime.getTime() - startTime.getTime();
+        if (!isNaN(diffMs)) {
+          const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+          const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+          ticketSheet.getRange(rowNum, 15).setValue(`${diffHours} ชม. ${diffMins} นาที`);
+        } else {
+          ticketSheet.getRange(rowNum, 15).setValue("ไม่สามารถคำนวณเวลาได้");
+        }
+      }
+
+      if (newStatus === "กำลังดำเนินการ" && tData[i][3] === "ขอเปิดสิทธิ์ครั้งแรก") {
+        const userEmailKey = tData[i][7];
+        const uData = userSheet.getDataRange().getValues();
+        for (let j = 1; j < uData.length; j++) {
+          if (uData[j][0] === userEmailKey) {
+            const nameEn = uData[j][4];
+            const nameTh = tData[i][1];
+            const newUsername = generateUsername(nameEn);
+            if (newUsername !== "") {
+              userSheet.getRange(j + 1, 1).setValue(newUsername);
+              const managerEmail = tData[i][9]; 
+              if (managerEmail) {
+                const scriptUrl = ScriptApp.getService().getUrl();
+                const approveLink = `${scriptUrl}?action=approve&email=${encodeURIComponent(newUsername)}`;
+                MailApp.sendEmail({
+                  to: managerEmail,
+                  subject: `[ขออนุมัติสิทธิ์] พนักงานใหม่: คุณ ${nameTh}`,
+                  htmlBody: `
+                    <div style="font-family: sans-serif; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
+                      <h3 style="color: #0056b3;">📧 แจ้งขออนุมัติใช้งานระบบ</h3>
+                      <p>เจ้าหน้าที่ IT รับเรื่องแล้ว และได้กำหนด Username ดังนี้:</p>
+                      <hr>
+                      <b>ชื่อ-สกุล:</b> ${nameTh}<br>
+                      <b>Username:</b> <span style="color: #d9534f; font-weight: bold;">${newUsername}</span><br>
+                      <b>ระบบที่ขอ:</b> ${tData[i][4]}<br>
+                      <hr>
+                      <p>คลิกปุ่มเพื่ออนุมัติสิทธิ์:</p>
+                      <div style="text-align: center; margin: 20px 0;">
+                        <a href="${approveLink}" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">✅ อนุมัติสิทธิ์</a>
+                      </div>
+                    </div>`
+                });
+              }
+            }
+            break;
+          }
+        }
+      }
+
+      if (newStatus === 'เสร็จสิ้น') {
+        const lineMsgClose = 
+          "✅ ปิดงานเรียบร้อย!\n" +
+          "🎫 ลำดับคิว: " + queueNum + "\n" +
+          "👤 ผู้แจ้ง: " + tData[i][1] + "\n" +
+          "🛠️ วิธีแก้ไข: " + (resolution ? resolution : "ดำเนินการเรียบร้อย") + "\n" +
+          "👩‍💻 แอดมิน: " + (adminName ? adminName : "-");
+        sendLineAlert(lineMsgClose);
+      }
+      return out({ status: 'success' });
+    }
+  }
+  return out({ status: 'error' });
+}
+
+function handleLogin(ss, u, p) {
+  const data = ss.getSheetByName(USER_SHEET).getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(u).trim() && String(data[i][1]).trim() === String(p).trim()) {
+      return out({ status: 'success', name: data[i][2], role: String(data[i][3]).trim() });
+    }
+  }
+  return out({ status: 'fail' });
+}
+
+function handleListTickets(ss) {
+  const sheet = ss.getSheetByName(TICKET_SHEET);
+  const data = sheet.getDataRange().getValues();
+  data.shift();
+
+  const toThaiStr = (val) => {
+    if (!val || val === "") return "";
+    if (val instanceof Date) {
+      return Utilities.formatDate(val, "GMT+7", "dd/MM/yyyy HH:mm:ss");
+    }
+    return String(val).trim();
+  };
+
+  return out(
+    data
+      .filter(row => {
+        if (!row[6]) return false; // ไม่มีเลขคิว ข้ามเลย
+        const status = String(row[8]).trim();
+        // ✅ กรอง: แสดงเฉพาะ รอดำเนินการ และ กำลังดำเนินการ เท่านั้น
+        return status === 'รอดำเนินการ' || status === 'ใหม่' || status === 'กำลังดำเนินการ';
+      })
+      .map(row => ({
+        timestamp:        toThaiStr(row[0]),
+        name:             row[1],
+        detail:           row[5],
+        queue:            row[6],
+        status:           row[8],
+        admin:            row[10],
+        finish_timestamp: toThaiStr(row[13])
+      }))
+  );
+}
+
+function handleGetUserTickets(ss, username) {
+  const sheet = ss.getSheetByName(TICKET_SHEET);
+  const userSheet = ss.getSheetByName(USER_SHEET);
+  const data = sheet.getDataRange().getValues();
+  data.shift();
+
+  // ✅ แปลง username → ชื่อไทยก่อน แล้วค่อยเทียบ
+  const userData = userSheet.getDataRange().getValues();
+  let thaiName = username;
+  for (let i = 1; i < userData.length; i++) {
+    if (String(userData[i][0]).trim().toLowerCase() === String(username).trim().toLowerCase()) {
+      thaiName = String(userData[i][2]).trim();
+      break;
+    }
+  }
+
+  const allWaiting = data.filter(row => row[8] === "รอดำเนินการ");
+  const userTickets = allWaiting.filter(row => String(row[1]).trim() === thaiName);
+  return out(userTickets.map(t => {
+    const indexInGlobalWaiting = allWaiting.findIndex(w => w[6] === t[6]);
+    return { queue: t[6], system: t[4], status: t[8], ahead: indexInGlobalWaiting };
+  }));
+}
+
+// ============================================================
+// 📧 ฟังก์ชันส่งอีเมลแจ้งผู้ใช้งานเมื่อ แอดมินรับงาน / ปิดงาน (เวอร์ชันดักจับคอลัมน์ปลอดภัย)
+// ============================================================
+function sendTicketEmail(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const sheet = ss.getSheetByName(TICKET_SHEET);
+    if (!sheet) return out({ status: 'error', message: 'ไม่พบหน้าชีทตาราง Tickets' });
+
+    const rows = sheet.getDataRange().getValues();
+    const headers = rows[0];
+
+    // ค้นหาดึงตำแหน่งดัชนีคอลัมน์จากชื่อหัวข้อตาราง (แปลงเป็นตัวพิมพ์เล็กเพื่อความแม่นยำ)
+    const lowerHeaders = headers.map(h => String(h).toLowerCase().trim());
+    
+    let colQueue      = lowerHeaders.indexOf('queue');    
+    let colEmail      = lowerHeaders.indexOf('email');    
+    let colRequester  = lowerHeaders.indexOf('name');     
+    let colIssue      = lowerHeaders.indexOf('detail');   // ดักคำว่า detail
+    if (colIssue === -1) colIssue = lowerHeaders.indexOf('issue'); // สแปร์คำว่า issue เผื่อไว้ค่ะ
+
+    // 🛡️ ระบบเซฟตี้กู้ชีพดัชนีคอลัมน์อัตโนมัติ (หากตรวจไม่เจอข้อความหัวตารางตรงๆ)
+    if (colQueue === -1) colQueue = 6;      // คอลัมน์ G (เลขคิว)
+    if (colEmail === -1) colEmail = 7;      // คอลัมน์ H (อีเมลผู้แจ้ง)
+    if (colRequester === -1) colRequester = 1; // คอลัมน์ B (ชื่อผู้แจ้ง)
+    if (colIssue === -1) colIssue = 5;      // คอลัมน์ F (รายละเอียดปัญหา)
+
+    // วนลูปสแกนหาแถวข้อมูลคิวที่แอดมินกำลังทำรายการ
+    const row = rows.find((r, i) => i > 0 && String(r[colQueue]).trim() == String(data.queue).trim());
+    if (!row) return out({ status: 'error', message: 'ไม่พบหมายเลขคิวนี้ในระบบ' });
+
+    const toEmail     = row[colEmail];
+    const requester   = row[colRequester] ?? 'ผู้ใช้งาน';
+    const issueDetail = row[colIssue]     ?? '-';
+
+    if (!toEmail) return out({ status: 'error', message: 'แถวข้อมูลนี้ระบุอีเมลผู้แจ้งว่างเปล่า' });
+
+    const isFinish   = data.newStatus === 'เสร็จสิ้น';
+    
+    // จัดรูปแบบการแสดงผลของวันเวลาให้ออกมาเป็นเวลาไทยใช้งานง่ายอ่านสะดวก
+    const actionTime = data.actionTime
+      ? Utilities.formatDate(new Date(data.actionTime), 'GMT+7', 'dd/MM/yyyy HH:mm')
+      : Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm');
+
+    // สร้างข้อความหัวเรื่องและป้ายกำกับตามประเภทการเคลื่อนไหวของสถานะงาน
+    const subject = isFinish
+      ? `[IT Support - ปิดงาน] คิว ${data.queue} — ดำเนินการแก้ไขเรียบร้อยแล้วค่ะ`
+      : `[IT Support - รับเรื่อง] คิว ${data.queue} — เจ้าหน้าที่กดรับเรื่องเข้าระบบแล้วค่ะ`;
+
+    const statusBadgeColor = isFinish ? '#28a745' : '#1565c0';
+    const statusLabel      = isFinish ? '✅ แก้ไขเสร็จสิ้น' : '🔧 กำลังดำเนินการ';
+
+    // บล็อกแสดงผลรายละเอียดวิธีกระบวนการแก้ไข (จะนำมาโชว์เฉพาะตอนปิดงานเสร็จสิ้นเท่านั้นค่ะ)
+    let displayResolution = data.resolution;
+    if (displayResolution) {
+      // ค้นหาข้อความที่อยู่ระหว่าง "ดำเนินการ :" และ "สถานะ :"
+      const match = displayResolution.match(/ดำเนินการ\s*:\s*(.*?)(?:\s*สถานะ\s*:|$)/);
+      if (match && match[1]) {
+        displayResolution = match[1].trim();
+      }
+    }
+    const resolutionBlock = isFinish && displayResolution ? `
+      <tr>
+        <td style="padding:8px 0;color:#555;font-size:13px;font-weight:bold;vertical-align:top;width:110px;">สรุปการแก้ไข</td>
+        <td style="padding:8px 0;font-size:13px;color:#222;white-space:pre-line;line-height:1.5;">${displayResolution}</td>
+      </tr>` : '';
+
+    const htmlBody = `
+      <div style="font-family:'Sarabun','K2D',sans-serif;max-width:500px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+        <div style="background:${statusBadgeColor};padding:20px 24px;text-align:center;">
+          <h2 style="margin:0;color:#ffffff;font-size:18px;letter-spacing:0.5px;">${statusLabel}</h2>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:12px;">สำนักงานเทคโนโลยีสารสนเทศ (สทส.) อสป.</p>
+        </div>
+        <div style="padding:24px;background:#ffffff;">
+          <p style="font-size:14px;color:#1a202c;margin-top:0;">เรียน คุณ<b>${requester}</b>,</p>
+          <p style="font-size:13px;color:#4a5568;line-height:1.6;margin-bottom:20px;">
+            ${isFinish
+              ? 'เจ้าหน้าที่ไอทีได้ดำเนินการตรวจสอบแก้ไขปัญหา และทำรายการปิดงานคิวซ่อมแซมสารสนเทศของคุณเรียบร้อยแล้วค่ะ มีรายละเอียดสรุปการดำเนินงานดังนี้:'
+              : 'เจ้าหน้าที่ไอทีได้รับทราบปัญหาและกดรับคิวงานแจ้งซ่อมของคุณเข้าสู่ระบบเรียบร้อยแล้วค่ะ ขณะนี้กำลังเร่งดำเนินการตรวจสอบแก้ไขให้โดยเร็วที่สุด'}
+          </p>
+          <table style="width:100%;border-collapse:collapse;border-top:1px dashed #e2e8f0;margin-top:10px;">
+            <tr>
+              <td style="padding:9px 0;color:#555;font-size:13px;width:110px;">หมายเลขคิว</td>
+              <td style="padding:9px 0;font-size:13px;font-weight:bold;color:#1565c0;">${data.queue}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:9px 8px;color:#555;font-size:13px;">ปัญหาที่แจ้ง</td>
+              <td style="padding:9px 8px;font-size:13px;color:#334155;">${issueDetail}</td>
+            </tr>
+            <tr>
+              <td style="padding:9px 0;color:#555;font-size:13px;">ผู้ดูแลระบบ</td>
+              <td style="padding:9px 0;font-size:13px;color:#334155;font-weight:500;">${data.adminName}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:9px 8px;color:#555;font-size:13px;">วันเวลาทำรายการ</td>
+              <td style="padding:9px 8px;font-size:13px;color:#334155;">${actionTime} น.</td>
+            </tr>
+            ${resolutionBlock}
+          </table>
+        </div>
+        <div style="background:#f1f5f9;padding:12px 24px;border-top:1px solid #e2e8f0;text-align:center;">
+          <p style="font-size:11px;color:#64748b;margin:0;">อีเมลฉบับนี้เป็นการแจ้งเตือนสถานะจากระบบอัตโนมัติ กรุณาอย่าตอบกลับค่ะ</p>
+        </div>
+      </div>`;
+
+    MailApp.sendEmail({
+      to:       toEmail,
+      subject:  subject,
+      htmlBody: htmlBody,
+      name:     'FMO IT Support'
+    });
+
+    return out({ status: 'success' });
+  } catch (e) {
+    console.error('sendTicketEmail error: ' + e.message);
+    return out({ status: 'error', message: e.message });
+  }
+}
+
+function handleForgotPassword(ss, req) {
+  const sheet = ss.getSheetByName(USER_SHEET);
+  const data = sheet.getDataRange().getValues();
+
+  function normalizeName(str) {
+    return String(str || '')
+      .replace(/\./g, '')
+      .replace(/^(นาย|นาง|นางสาว|นส|ดร|ว่าที่รต|Mr|Mrs|Ms)\.?\s*/i, '')
+      .replace(/\s+/g, '')
+      .toLowerCase();
+  }
+
+  const incomingName = normalizeName(req.nameTh);
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(req.username).trim()) {
+      const storedName = normalizeName(data[i][2]);
+      if (storedName === incomingName) {
+        const timestamp = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy HH:mm:ss");
+        sheet.getRange(i + 1, 2).setValue(String(req.newPass).trim()); // ✅ col B = password
+        sheet.getRange(i + 1, 10).setValue(timestamp);                 // ✅ col J = วันที่เปลี่ยนรหัส
+        return out({ status: 'success' });
+      } else {
+        return out({ status: 'error', message: 'ชื่อ-นามสกุล ไม่ตรงกับระบบค่ะ' });
+      }
+    }
+  }
+  return out({ status: 'error', message: 'ไม่พบชื่อผู้ใช้งานนี้ในระบบค่ะ' });
+}
+
+function processPasswordReset(username, email, newPass) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("Users");
+    if (!sheet) return { success: false, message: "ระบบหาชีตชื่อ 'Users' ไม่เจอค่ะ" };
+
+    const data = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0].toString() === username) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    if (rowIndex === -1) return { success: false, message: "ไม่พบชื่อผู้ใช้งานนี้ในระบบค่ะ" };
+    
+    sheet.getRange(rowIndex, 2).setValue(newPass); 
+    sheet.getRange(rowIndex, 9).setValue(email);
+    const timestamp = Utilities.formatDate(new Date(), "Asia/Bangkok", "dd/MM/yyyy HH:mm:ss");
+    sheet.getRange(rowIndex, 10).setValue(timestamp);
+
+    const subject = "แจ้งการเปลี่ยนรหัสผ่านใหม่ ระบบสารสนเทศ อสป.";
+    const body = "เรียนคุณ " + username + ",\n\nระบบได้ทำการเปลี่ยนรหัสผ่านของคุณเรียบร้อยแล้วค่ะ";
+    MailApp.sendEmail(email, subject, body, { name: "FMO IT Service" });
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error.toString() };
+  }
+}
+
+function sendLineAlert(messageText) {
+  try {
+    // ✅ ป้องกันส่ง empty string ไป LINE
+    if (!messageText || String(messageText).trim() === "") {
+      Logger.log("sendLineAlert: messageText is empty, skipped");
+      return;
+    }
+
+    const url = "https://api.line.me/v2/bot/message/multicast";
+    const payload = {
+      "to": ADMIN_IDS,
+      "messages": [{ 
+        "type": "text", 
+        "text": String(messageText).trim() 
+      }]
+    };
+    const options = {
+      "method": "post",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + LINE_OA_TOKEN
+      },
+      "payload": JSON.stringify(payload),
+      "muteHttpExceptions": true  // ✅ ดู error response เต็มๆ
+    };
+
+    const response = UrlFetchApp.fetch(url, options);
+    const code = response.getResponseCode();
+    if (code !== 200) {
+      Logger.log("LINE OA Error " + code + ": " + response.getContentText());
+    }
+  } catch (error) { 
+    Logger.log("LINE OA Error: " + error.toString()); 
+  }
+}
+function handleGetStats(ss) {
+  const sheet = ss.getSheetByName(TICKET_SHEET);
+  const data  = sheet.getDataRange().getValues();
+  data.shift(); // ตัดแถว header ออก
+
+  const now   = new Date();
+  const curMM = now.getMonth() + 1;
+  const curYY = now.getFullYear();
+
+  let pending = 0, inProgress = 0, completedThisMonth = 0, total = 0;
+
+  data.forEach(row => {
+    if (!row[6]) return; // ข้ามแถวที่ไม่มีเลขคิว
+    const status = String(row[8]).trim();
+    total++;
+
+    if (status === 'รอดำเนินการ' || status === 'ใหม่') {
+      pending++;
+    } else if (status === 'กำลังดำเนินการ') {
+      inProgress++;
+    } else if (status === 'เสร็จสิ้น') {
+      // ดึงเวลาปิดงานจากคอลัมน์ N (index 13)
+      let finishDate = null;
+      const finishVal = row[13];
+      if (finishVal instanceof Date && !isNaN(finishVal)) {
+        finishDate = finishVal;
+      } else if (finishVal) {
+        const str = String(finishVal).trim();
+        if (str.includes('/')) {
+          const [datePart, timePart] = str.split(' ');
+          const [dd, mm, yyyy] = datePart.split('/');
+          finishDate = new Date(`${yyyy}/${mm}/${dd} ${timePart || '00:00:00'}`);
+        } else {
+          finishDate = new Date(str);
+        }
+      }
+      if (finishDate && !isNaN(finishDate.getTime())) {
+        if ((finishDate.getMonth() + 1) === curMM && finishDate.getFullYear() === curYY) {
+          completedThisMonth++;
+        }
+      }
+    }
+  });
+
+  return out({ pending, inProgress, completedThisMonth, total });
+}
+
+function out(d) { return ContentService.createTextOutput(JSON.stringify(d)).setMimeType(ContentService.MimeType.JSON); }
