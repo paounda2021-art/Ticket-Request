@@ -673,7 +673,7 @@ let ticketDetailMap = {};
         <div style="text-align:left;font-size:13px;font-weight:bold;margin-bottom:4px;">ชื่อผู้ใช้งาน (Username)</div>
         <input id="swal-forgot-user" class="swal2-input" placeholder="เช่น somying.r" style="margin:0 0 10px 0;width:100%;height:35px;font-size:13px;box-sizing:border-box;display:block;">
         <div style="text-align:left;font-size:13px;font-weight:bold;margin-bottom:4px;">ชื่อ-นามสกุล (ภาษาไทย)</div>
-        <input id="swal-forgot-nameTh" class="swal2-input" placeholder="เช่น น.ส.ณัฐอนงค์ แสงจันทร์งาม" style="margin:0 0 10px 0;width:100%;height:35px;font-size:13px;box-sizing:border-box;display:block;">
+        <input id="swal-forgot-nameTh" class="swal2-input" placeholder="เช่น ณัฐอนงค์ แสงจันทร์งาม" style="margin:0 0 10px 0;width:100%;height:35px;font-size:13px;box-sizing:border-box;display:block;">
         <hr style="border:0;border-top:1px dashed #ccc;margin:12px 0;">
         <div style="text-align:left;font-size:13px;font-weight:bold;color:#0056b3;margin-bottom:4px;">ตั้งรหัสผ่านใหม่</div>
         <input id="swal-forgot-newpass" type="password" class="swal2-input" placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)" style="margin:0 0 6px 0;width:100%;height:35px;font-size:13px;box-sizing:border-box;display:block;">
