@@ -977,7 +977,7 @@ const JS = `let ticketDetailMap = {};
       html: \`
         <div style="font-size:13px;color:#555;margin-bottom:12px;">กรุณายืนยันตัวตนเพื่อตั้งรหัสผ่านใหม่</div>
         <div style="text-align:left;font-size:13px;font-weight:bold;margin-bottom:4px;">ชื่อผู้ใช้งาน (Username)</div>
-        <input id="swal-forgot-user" class="swal2-input" placeholder="เช่น somying.r" style="margin:0 0 10px 0;width:100%;height:35px;font-size:13px;box-sizing:border-box;display:block;">
+        <input id="swal-forgot-user" class="swal2-input" placeholder="natanong.s" style="margin:0 0 10px 0;width:100%;height:35px;font-size:13px;box-sizing:border-box;display:block;">
         <div style="text-align:left;font-size:13px;font-weight:bold;margin-bottom:4px;">ชื่อ-นามสกุล (ภาษาไทย)</div>
         <input id="swal-forgot-nameTh" class="swal2-input" placeholder="เช่น ณัฐอนงค์ แสงจันทร์งาม" style="margin:0 0 10px 0;width:100%;height:35px;font-size:13px;box-sizing:border-box;display:block;">
         <hr style="border:0;border-top:1px dashed #ccc;margin:12px 0;">
