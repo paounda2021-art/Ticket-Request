@@ -37,7 +37,7 @@ const HTML = `<!DOCTYPE html>
   </div>
   <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
   <div class="text-center">
-    <label id="lblNewUser" style="font-weight:normal;font-size:13px;color:#e06666;cursor:pointer;user-select:none;" onclick="toggleNewUserButton()">สำหรับพนักงานใหม่เท่านั้น!</label>
+    <label id="lblNewUser" style="font-weight:bold;font-size:15px;color:#e06666;cursor:pointer;user-select:none;" onclick="toggleNewUserButton()">สำหรับพนักงานใหม่เท่านั้น!! คลิกที่นี่</label>
     <button id="btnNewUser" class="btn-secondary" onclick="switchView('newUserBox')" style="margin-top:5px;display:none;">✨ ขอสิทธิ์เข้าใช้งานระบบ (พนักงานใหม่เท่านั้น)</button>
   </div>
   <div style="text-align:center;color:rgba(255,255,255,0.75);font-size:12px;font-weight:300;padding:20px 0;letter-spacing:0.5px;text-shadow:1px 1px 3px rgba(0,0,0,0.5);">
