@@ -56,6 +56,13 @@ let ticketDetailMap = {};
     else console.error('switchView: ไม่พบ ID: ' + viewId);
   }
 
+  function toggleNewUserButton() {
+    const btn = document.getElementById('btnNewUser');
+    if (btn) {
+      btn.style.display = (btn.style.display === 'none' || btn.style.display === '') ? 'block' : 'none';
+    }
+  }
+
   // ── Login ────────────────────────────────────────────────
   async function login() {
     const uEl = document.getElementById('username');
