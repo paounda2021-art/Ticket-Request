@@ -33,7 +33,7 @@ const HTML = `<!DOCTYPE html>
   </div>
   <button id="btnLogin" class="btn-primary" onclick="login()">เข้าสู่ระบบ</button>
   <div style="text-align:center;margin-top:8px;">
-    <a href="#" onclick="showForgotPassword()" style="font-size:13px;color:#0056b3;text-decoration:none;font-weight:bold;">🔑 ลืมรหัสผ่าน?</a>
+    <a href="#" onclick="showForgotPassword()" style="font-size:13px;color:#0056b3;text-decoration:none;font-weight:bold;">🔑 ลืมรหัสผ่าน? หรือ ไม่เคยเข้าสู่ระบบ</a>
   </div>
   <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
   <div class="text-center">
