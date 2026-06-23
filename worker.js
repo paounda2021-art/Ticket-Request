@@ -113,7 +113,7 @@ const HTML = `<!DOCTYPE html>
       <option value="ขอเพิ่มสิทธิ์">🔑 ขอเพิ่มสิทธิ์ระบบ (Add-on)</option>
     </select>
     <label>ระบบหรืออุปกรณ์ <span class="required">*</span></label>
-    <input id="user_system" placeholder="เช่น เครื่องพิมพ์ชั้น 2">
+    <input id="user_system" placeholder="เช่น เครื่องพิมพ์ชั้น 2(แจ้งรหัสพิมพ์ให้เจ้าหน้าที่ด้วย)">
     <label>รายละเอียด <span class="required">*</span></label>
     <textarea id="user_detail" placeholder="อธิบายปัญหา..."></textarea>
     <label>อีเมลแจ้งเตือน <span class="required">*</span></label>
