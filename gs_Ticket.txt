@@ -42,6 +42,7 @@ function doPost(e) {
       case 'get_user_tickets': return handleGetUserTickets(ss, req.username);
       case 'update_status': return handleUpdateStatus(ss, req.queue, req.newStatus, req.resolution, req.adminName);
       case 'forgot_password': return handleForgotPassword(ss, req);
+      case 'cancel_ticket': return handleCancelTicket(ss, req);
       // 🚀 ท่อ API ดักตรวจคิวประเมินที่ค้างอยู่ (ช่อง I เสร็จสิ้น และ L ว่าง)
       case 'send_ticket_email': return sendTicketEmail(req);
       case 'get_stats': return handleGetStats(ss);
@@ -484,10 +485,16 @@ function handleGetUserTickets(ss, username) {
     }
   }
 
+  // ✅ ดึงทั้ง "รอดำเนินการ" และ "กำลังดำเนินการ"
+  const allActive = data.filter(row => row[8] === "รอดำเนินการ" || row[8] === "กำลังดำเนินการ");
+  const userTickets = allActive.filter(row => String(row[1]).trim() === thaiName);
+  
+  // คำนวณคิวก่อนหน้า เฉพาะประเภทที่เป็น "รอดำเนินการ"
   const allWaiting = data.filter(row => row[8] === "รอดำเนินการ");
-  const userTickets = allWaiting.filter(row => String(row[1]).trim() === thaiName);
+
   return out(userTickets.map(t => {
-    const indexInGlobalWaiting = allWaiting.findIndex(w => w[6] === t[6]);
+    const isWaiting = t[8] === "รอดำเนินการ";
+    const indexInGlobalWaiting = isWaiting ? allWaiting.findIndex(w => w[6] === t[6]) : -1;
     return { queue: t[6], system: t[4], status: t[8], ahead: indexInGlobalWaiting };
   }));
 }
@@ -751,6 +758,134 @@ function handleGetStats(ss) {
   });
 
   return out({ pending, inProgress, completedThisMonth, total });
+}
+
+function handleCancelTicket(ss, req) {
+  const lock = LockService.getScriptLock();
+  let hasLock = false;
+  try {
+    lock.waitLock(30000);
+    hasLock = true;
+
+    const ticketSheet = ss.getSheetByName(TICKET_SHEET);
+    const data = ticketSheet.getDataRange().getValues();
+
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][6]).trim() === String(req.queue).trim()) {
+        const rowNum = i + 1;
+
+        // เมื่อยกเลิกแล้วให้ปิดงานทันทีโดยอัปเดตสถานะและข้อมูล SLA
+        ticketSheet.getRange(rowNum, 9).setValue("ยกเลิกโดยผู้แจ้ง");
+        ticketSheet.getRange(rowNum, 10).setValue("ผู้ใช้งานยกเลิกเคส: " + req.reason);
+
+        // วันเวลาปิดงาน (ยกเลิก)
+        const finishTime = new Date();
+        const finishStr = Utilities.formatDate(finishTime, "GMT+7", "dd/MM/yyyy HH:mm:ss");
+        ticketSheet.getRange(rowNum, 14).setValue(finishStr);
+
+        // คำนวณเวลาที่ใช้ดำเนินการ
+        const startValue = data[i][0];
+        const parseBackendDate = (val) => {
+          if (!val) return new Date();
+          if (val instanceof Date && !isNaN(val)) return val;
+          const str = String(val).trim();
+          if (str.includes('T')) return new Date(str);
+          if (str.includes('/')) {
+            const parts = str.split(' ');
+            const dateParts = parts[0].split('/');
+            const timeStr = parts.length > 1 ? parts[1] : "00:00:00";
+            let y = dateParts[2], m = dateParts[1], d = dateParts[0];
+            if (dateParts[0].length === 4) {
+              y = dateParts[0]; m = dateParts[1]; d = dateParts[2];
+            }
+            return new Date(`${y}/${m}/${d} ${timeStr}`);
+          }
+          return new Date(str);
+        };
+
+        const startTime = parseBackendDate(startValue);
+        const diffMs = finishTime.getTime() - startTime.getTime();
+        if (!isNaN(diffMs)) {
+          const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+          const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+          ticketSheet.getRange(rowNum, 15).setValue(`${diffHours} ชม. ${diffMins} นาที`);
+        } else {
+          ticketSheet.getRange(rowNum, 15).setValue("ไม่สามารถคำนวณเวลาได้");
+        }
+
+        SpreadsheetApp.flush();
+        lock.releaseLock();
+        hasLock = false;
+
+        // 📧 ส่งเมลแจ้งเจ้าหน้าที่ IT
+        try {
+          MailApp.sendEmail({
+            to: "it@fishmarket.co.th",
+            subject: `[IT Support - ยกเลิกเคส] คิว ${req.queue} ถูกยกเลิกโดยผู้แจ้งค่ะ`,
+            htmlBody: `
+              <div style="font-family:'Sarabun','K2D',sans-serif;max-width:500px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+                <div style="background:#dc3545;padding:20px 24px;text-align:center;">
+                  <h2 style="margin:0;color:#ffffff;font-size:18px;letter-spacing:0.5px;">🚨 เคสถูกยกเลิกโดยผู้แจ้ง</h2>
+                  <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:12px;">แจ้งเตือนงานถูกยกเลิกโดยผู้ใช้งาน</p>
+                </div>
+                <div style="padding:24px;background:#ffffff;">
+                  <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+                    <tr>
+                      <td style="padding:9px 0;color:#555;font-size:13px;width:120px;font-weight:bold;">หมายเลขคิว</td>
+                      <td style="padding:9px 0;font-size:13px;font-weight:bold;color:#dc3545;">${req.queue}</td>
+                    </tr>
+                    <tr style="background:#f8fafc;">
+                      <td style="padding:9px 8px;color:#555;font-size:13px;font-weight:bold;">ผู้แจ้งยกเลิก</td>
+                      <td style="padding:9px 8px;font-size:13px;color:#334155;">${data[i][1]}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:9px 0;color:#555;font-size:13px;font-weight:bold;">ระบบ/อุปกรณ์</td>
+                      <td style="padding:9px 0;font-size:13px;color:#334155;">${data[i][4]}</td>
+                    </tr>
+                    <tr style="background:#f8fafc;">
+                      <td style="padding:9px 8px;color:#555;font-size:13px;font-weight:bold;">ปัญหาที่แจ้ง</td>
+                      <td style="padding:9px 8px;font-size:13px;color:#334155;">${data[i][5]}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:9px 0;color:#dc3545;font-size:13px;font-weight:bold;vertical-align:top;">เหตุผลการยกเลิก</td>
+                      <td style="padding:9px 0;font-size:13px;color:#dc3545;font-weight:bold;white-space:pre-line;line-height:1.5;">${req.reason}</td>
+                    </tr>
+                    <tr style="background:#f8fafc;">
+                      <td style="padding:9px 8px;color:#555;font-size:13px;font-weight:bold;">วันเวลาทำรายการ</td>
+                      <td style="padding:9px 8px;font-size:13px;color:#334155;">${finishStr} น.</td>
+                    </tr>
+                  </table>
+                </div>
+                <div style="background:#f1f5f9;padding:12px 24px;border-top:1px solid #e2e8f0;text-align:center;">
+                  <p style="font-size:11px;color:#64748b;margin:0;">อีเมลฉบับนี้เป็นการแจ้งเตือนระบบอัตโนมัติจากสำนักงานไอที อสป. ค่ะ</p>
+                </div>
+              </div>`,
+            name: 'FMO IT Support'
+          });
+        } catch(mailErr) {
+          Logger.log("Mail send failed: " + mailErr.message);
+        }
+
+        // 🚨 ส่งการแจ้งเตือน Line Alert ด้วย
+        const lineMsgCancel = 
+          "🚨 ผู้ใช้งานยกเลิกเคสด้วยตัวเอง!\n" +
+          "🎫 ลำดับคิว: " + req.queue + "\n" +
+          "👤 ผู้แจ้ง: " + data[i][1] + "\n" +
+          "💻 ระบบ: " + data[i][4] + "\n" +
+          "📝 เหตุผล: " + req.reason;
+        sendLineAlert(lineMsgCancel);
+
+        return out({ status: 'success' });
+      }
+    }
+    return out({ status: 'error', message: 'ไม่พบหมายเลขคิวในระบบ' });
+  } catch (error) {
+    return out({ status: 'error', message: error.message });
+  } finally {
+    if (hasLock) {
+      lock.releaseLock();
+    }
+  }
 }
 
 function out(d) { return ContentService.createTextOutput(JSON.stringify(d)).setMimeType(ContentService.MimeType.JSON); }

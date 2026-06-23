@@ -302,21 +302,96 @@ let ticketDetailMap = {};
       }
       let html = '';
       tickets.forEach(t => {
-        const statusColor = t.status === 'รอดำเนินการ' ? '#ff9800' : '#007bff';
-        const aheadText   = t.ahead > 0 ? `(รออีก ${t.ahead} คิว)` : '<span style="color:green;">(ถึงคิวของคุณแล้ว รอเจ้าหน้าที่ประสาน)</span>';
-        html += `<div style="padding:10px 0;border-bottom:1px dashed #ccc;">
-          <strong style="color:#333;">${t.queue}</strong> : ${t.system}
-          <div style="float:right;text-align:right;">
-            <span style="color:${statusColor};font-weight:bold;">${t.status}</span><br>
-            <span style="font-size:11px;color:#dc3545;">${aheadText}</span>
+        const isWaiting   = t.status === 'รอดำเนินการ' || t.status === 'ใหม่';
+        const statusColor = isWaiting ? '#ff9800' : '#007bff';
+        const statusIcon  = isWaiting ? '🕐' : '⚙️';
+        const aheadText   = t.ahead > 0 ? `รออีก ${t.ahead} คิว` : (isWaiting ? 'ถึงคิวของคุณแล้ว รอเจ้าหน้าที่ประสาน' : 'กำลังดำเนินการแก้ไขเคส');
+        
+        html += `<div style="padding:10px 0;border-bottom:1px dashed #ccc;display:flex;justify-content:space-between;align-items:center;">
+          <div style="flex:1;padding-right:10px;">
+            <strong style="color:#333;">${t.queue}</strong> : ${t.system}
+            <div style="font-size:11px;color:${isWaiting ? '#dc3545' : '#28a745'};margin-top:2px;">${statusIcon} ${aheadText}</div>
           </div>
-          <div style="clear:both;"></div>
+          <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+            <span style="color:${statusColor};font-weight:bold;font-size:13px;">${t.status}</span>
+            <button onclick="cancelTicketByUser('${t.queue}', '${(t.system || '').replace(/'/g, "\\'")}')" style="padding:4px 8px;font-size:11px;background:#ffab91;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;transition:0.2s;width:auto;margin:0;" onmouseover="this.style.background='#e64a19'" onmouseout="this.style.background='#ffab91'">ยกเลิกเคส</button>
+          </div>
         </div>`;
       });
       container.innerHTML = html;
       toggleTicketForm(false);
     } catch (e) {
       container.innerHTML = '❌ โหลดข้อมูลไม่สำเร็จ';
+    }
+  }
+
+  // ── User cancels their own ticket ─────────────────────────
+  async function cancelTicketByUser(queue, systemName) {
+    const styleCutePopup = () => {
+      const popup = Swal.getPopup(); if (!popup) return;
+      popup.style.setProperty('width','280px','important');
+      popup.style.setProperty('max-width','280px','important');
+      popup.style.setProperty('border-radius','16px','important');
+      popup.style.setProperty('padding','1.5em 1em 1em 1em','important');
+      const icon = popup.querySelector('.swal2-icon');
+      if (icon){icon.style.transform='scale(0.65)';icon.style.margin='0 auto -10px auto';}
+      const title = popup.querySelector('.swal2-title');
+      if (title) title.style.setProperty('font-size','15.5px','important');
+      const textEl = popup.querySelector('.swal2-html-container');
+      if (textEl) textEl.style.setProperty('font-size','13px','important');
+      const btnConfirm = popup.querySelector('.swal2-confirm');
+      if (btnConfirm){btnConfirm.style.setProperty('border-radius','20px','important');btnConfirm.style.setProperty('padding','6px 20px','important');btnConfirm.style.setProperty('font-size','13px','important');}
+      const btnCancel = popup.querySelector('.swal2-cancel');
+      if (btnCancel){btnCancel.style.setProperty('border-radius','20px','important');btnCancel.style.setProperty('padding','6px 20px','important');btnCancel.style.setProperty('font-size','13px','important');}
+    };
+
+    const { value: reason } = await Swal.fire({
+      title: '🚨 ยกเลิกคำขอแจ้งปัญหา',
+      html: `<div style="font-size:13px;color:#666;margin-bottom:10px;">คิว <b>${queue}</b> (${systemName})</div>`,
+      input: 'textarea',
+      inputPlaceholder: 'กรุณาระบุเหตุผลการยกเลิก (เช่น แก้ไขได้เองแล้ว)...',
+      showCancelButton: true,
+      confirmButtonText: 'ยืนยันยกเลิก',
+      cancelButtonText: 'ปิดหน้าต่าง',
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#6c757d',
+      width: '280px',
+      didOpen: styleCutePopup,
+      preConfirm: (value) => {
+        if (!value || value.trim() === '') {
+          Swal.showValidationMessage('กรุณาระบุเหตุผลในการยกเลิกด้วยค่ะ');
+          return false;
+        }
+        return value;
+      }
+    });
+
+    if (reason) {
+      Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); styleCutePopup(); } });
+      try {
+        const response = await fetch(API, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'cancel_ticket', queue, reason })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+          Swal.fire({
+            icon: 'success',
+            title: 'ยกเลิกเคสสำเร็จ',
+            text: 'ระบบได้ทำการยกเลิกเคสและส่งอีเมลแจ้งไอทีเรียบร้อยแล้วค่ะ',
+            confirmButtonText: 'ตกลง',
+            confirmButtonColor: '#28a745',
+            width: '260px',
+            didOpen: styleCutePopup
+          }).then(() => {
+            loadUserTickets();
+          });
+        } else {
+          Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: result.message || 'ไม่สามารถยกเลิกเคสได้', confirmButtonText: 'ตกลง', confirmButtonColor: '#dc3545', width: '260px', didOpen: styleCutePopup });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'การเชื่อมต่อผิดพลาด', text: 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ค่ะ', confirmButtonText: 'ตกลง', confirmButtonColor: '#dc3545', width: '260px', didOpen: styleCutePopup });
+      }
     }
   }
 
