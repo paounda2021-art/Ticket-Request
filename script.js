@@ -35,6 +35,10 @@ let ticketDetailMap = {};
 
   function logout() {
     currentUser = "";
+    currentLoginName = "";
+    sessionStorage.removeItem('ticket_username');
+    sessionStorage.removeItem('ticket_password');
+    sessionStorage.removeItem('ticket_active_view');
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
     switchView('loginBox');
@@ -52,8 +56,12 @@ let ticketDetailMap = {};
       if (el) el.classList.add('hidden');
     });
     const target = document.getElementById(viewId);
-    if (target) target.classList.remove('hidden');
-    else console.error('switchView: ไม่พบ ID: ' + viewId);
+    if (target) {
+      target.classList.remove('hidden');
+      sessionStorage.setItem('ticket_active_view', viewId);
+    } else {
+      console.error('switchView: ไม่พบ ID: ' + viewId);
+    }
   }
 
   function toggleNewUserButton() {
@@ -102,6 +110,9 @@ let ticketDetailMap = {};
         currentUser      = res.name || u;
         currentLoginName = u;
         const userRole   = (res.role || 'user').trim().toLowerCase();
+
+        sessionStorage.setItem('ticket_username', u);
+        sessionStorage.setItem('ticket_password', p);
 
         if (userRole === 'admin') {
           // ── Admin path ──────────────────────────────────
@@ -880,6 +891,13 @@ let ticketDetailMap = {};
   // ── On load ──────────────────────────────────────────────
   window.onload = function() {
     try {
+      const savedUser = sessionStorage.getItem('ticket_username');
+      const savedPass = sessionStorage.getItem('ticket_password');
+      const savedView = sessionStorage.getItem('ticket_active_view');
+      if (savedUser && savedPass) {
+        autoLogin(savedUser, savedPass, savedView);
+      }
+
       const urlParams = new URLSearchParams(window.location.search);
       const q = urlParams.get('q');
       if (q) {
@@ -890,3 +908,100 @@ let ticketDetailMap = {};
       }
     } catch(err) { console.log('URL Params Error:', err); }
   };
+
+  async function autoLogin(u, p, targetViewId) {
+    const styleCutePopup = () => {
+      const popup = Swal.getPopup(); if (!popup) return;
+      popup.style.setProperty('width','220px','important');
+      popup.style.setProperty('border-radius','16px','important');
+      popup.style.setProperty('padding','1em','important');
+      const title = popup.querySelector('.swal2-title');
+      if (title) title.style.setProperty('font-size','15px','important');
+    };
+
+    Swal.fire({
+      title: 'กำลังเชื่อมต่อเซสชัน...',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+        styleCutePopup();
+      }
+    });
+
+    try {
+      const response = await fetch(API, { method:'POST', body:JSON.stringify({ action:'login', username:u, password:p }) });
+      const res = await response.json();
+      Swal.close();
+
+      if (res.status === 'success') {
+        currentUser      = res.name || u;
+        currentLoginName = u;
+        const userRole   = (res.role || 'user').trim().toLowerCase();
+
+        document.getElementById('username').value = u;
+        document.getElementById('password').value = p;
+
+        if (userRole === 'admin') {
+          document.getElementById('displayAdmin').innerText = currentUser;
+          
+          const viewToRestore = targetViewId || 'adminBox';
+          if (viewToRestore === 'userBox') {
+            document.getElementById('displayUser').innerText = currentUser;
+            const emailInput = document.getElementById('user_email');
+            emailInput.value = u.includes('@') ? u : u + '@fishmarket.co.th';
+            emailInput.readOnly = false;
+            emailInput.style.backgroundColor = '#ffffff';
+            emailInput.style.cursor = 'text';
+
+            switchView('userBox');
+            loadUserTickets();
+
+            const switchBtn = document.getElementById('switch-view-btn');
+            if (switchBtn) {
+              switchBtn.style.display = 'none';
+            }
+            const btnToAdmin = document.getElementById('switch-to-admin-btn');
+            if (btnToAdmin) {
+              btnToAdmin.style.display = 'inline-block';
+              document.getElementById('switch-user-text').innerText = 'สลับ Admin';
+            }
+          } else {
+            switchView('adminBox');
+            loadAdminTickets();
+            const switchBtn = document.getElementById('switch-view-btn');
+            if (switchBtn) {
+              switchBtn.style.display = 'inline-block';
+              document.getElementById('switch-text').innerText = 'สลับ User';
+              switchBtn.style.setProperty('background','#9575cd','important');
+            }
+            const btnToAdmin = document.getElementById('switch-to-admin-btn');
+            if (btnToAdmin) btnToAdmin.style.display = 'none';
+          }
+
+        } else {
+          document.getElementById('displayUser').innerText = currentUser;
+          const emailInput = document.getElementById('user_email');
+          emailInput.value = u.includes('@') ? u : u + '@fishmarket.co.th';
+          emailInput.readOnly = true;
+          emailInput.style.backgroundColor = '#e9ecef';
+          emailInput.style.cursor = 'not-allowed';
+
+          switchView('userBox');
+          loadUserTickets();
+
+          if (document.getElementById('switch-view-btn'))    document.getElementById('switch-view-btn').style.display    = 'none';
+          if (document.getElementById('switch-to-admin-btn')) document.getElementById('switch-to-admin-btn').style.display = 'none';
+        }
+      } else {
+        sessionStorage.removeItem('ticket_username');
+        sessionStorage.removeItem('ticket_password');
+        sessionStorage.removeItem('ticket_active_view');
+      }
+    } catch (e) {
+      Swal.close();
+      console.error('Auto login error:', e);
+      sessionStorage.removeItem('ticket_username');
+      sessionStorage.removeItem('ticket_password');
+      sessionStorage.removeItem('ticket_active_view');
+    }
+  }
