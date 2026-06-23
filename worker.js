@@ -1076,7 +1076,10 @@ const JS = `let ticketDetailMap = {};
         <input id="swal-forgot-nameTh" class="swal2-input" placeholder="เช่น ณัฐอนงค์ แสงจันทร์งาม" style="margin:0 0 10px 0;width:100%;height:35px;font-size:13px;box-sizing:border-box;display:block;">
         <hr style="border:0;border-top:1px dashed #ccc;margin:12px 0;">
         <div style="text-align:left;font-size:13px;font-weight:bold;color:#0056b3;margin-bottom:4px;">ตั้งรหัสผ่านใหม่</div>
-        <input id="swal-forgot-newpass" type="password" class="swal2-input" placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)" style="margin:0 0 6px 0;width:100%;height:35px;font-size:13px;box-sizing:border-box;display:block;">
+        <div style="position:relative;margin-bottom:6px;">
+          <input id="swal-forgot-newpass" type="password" class="swal2-input" placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)" style="margin:0!important;padding-right:40px!important;width:100%;height:35px;font-size:13px;box-sizing:border-box;display:block;">
+          <i class="fa-solid fa-eye" id="swal-togglePasswordIcon" style="position:absolute;right:12px;top:10px;cursor:pointer;color:#888;font-size:14px;" title="แสดง/ซ่อนรหัสผ่าน"></i>
+        </div>
       <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:8px 10px;font-size:11px;color:#795548;line-height:1.7;text-align:left;">
         🔐 <b>เงื่อนไขรหัสผ่าน:</b><br>
         ✅ ความยาวอย่างน้อย 8 ตัวอักษร<br>
@@ -1101,6 +1104,23 @@ const JS = `let ticketDetailMap = {};
         if (btnCancel){btnCancel.style.setProperty('border-radius','20px','important');btnCancel.style.setProperty('width','90px','important');btnCancel.style.setProperty('font-size','13.5px','important');}
         const inputs = popup.querySelectorAll('.swal2-input');
         inputs.forEach(inp => inp.style.setProperty('width','100%','important'));
+
+        // Bind eye icon toggle event for new password input in modal
+        const eyeIcon = document.getElementById('swal-togglePasswordIcon');
+        const passInput = document.getElementById('swal-forgot-newpass');
+        if (eyeIcon && passInput) {
+          eyeIcon.addEventListener('click', () => {
+            if (passInput.type === 'password') {
+              passInput.type = 'text';
+              eyeIcon.classList.replace('fa-eye', 'fa-eye-slash');
+              eyeIcon.style.color = '#9b6dff';
+            } else {
+              passInput.type = 'password';
+              eyeIcon.classList.replace('fa-eye-slash', 'fa-eye');
+              eyeIcon.style.color = '#888';
+            }
+          });
+        }
       },
       preConfirm: () => {
         const uEl = document.getElementById('swal-forgot-user');
