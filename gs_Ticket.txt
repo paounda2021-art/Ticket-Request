@@ -181,112 +181,146 @@ function handleApprovalFromEmail(email) {
 
 // ฟังก์ชันเปิดคำขอพนักงานใหม่ (สมัครครั้งแรก)
 function handleNewRequest(ss, req) {
-  const ticketSheet = ss.getSheetByName("Tickets");
-  const userSheet = ss.getSheetByName("Users");
-  const now = new Date();
-  const timestamp = now.toISOString();
-  const queueNum = "Q-" + String(ticketSheet.getLastRow()).padStart(3, '0');
+  const lock = LockService.getScriptLock();
+  let hasLock = false;
+  try {
+    lock.waitLock(30000); // รอสูงสุด 30 วินาที
+    hasLock = true;
 
-  const initialUsername = generateUsername(req.name_en);
-  const userEmail = initialUsername + "@fishmarket.co.th";
+    const ticketSheet = ss.getSheetByName("Tickets");
+    const userSheet = ss.getSheetByName("Users");
+    const now = new Date();
+    const timestamp = now.toISOString();
+    const queueNum = "Q-" + String(ticketSheet.getLastRow()).padStart(3, '0');
 
-  userSheet.appendRow([
-    initialUsername, "1234", req.name, "user", req.name_en, "ยินยอม", "ใหม่", req.manager_email, userEmail
-  ]);
+    const initialUsername = generateUsername(req.name_en);
+    const userEmail = initialUsername + "@fishmarket.co.th";
 
-  ticketSheet.appendRow([
-    timestamp, req.name + " (ผู้ใช้ใหม่)", req.dept, "ขอเปิดสิทธิ์ครั้งแรก", req.system, req.detail, queueNum, req.email, "รอดำเนินการ", "", "", "", "", "", ""
-  ]);
+    userSheet.appendRow([
+      initialUsername, "1234", req.name, "user", req.name_en, "ยินยอม", "ใหม่", req.manager_email, userEmail
+    ]);
 
-  if (req.email) {
-    MailApp.sendEmail({
-      to: req.email,
-      subject: "ยินดีต้อนรับ! แจ้งข้อมูลการเข้าใช้งานระบบสารสนเทศ อสป.",
-      htmlBody: `
-        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-          <h3 style="color: #0056b3;">แจ้งข้อมูลบัญชีผู้ใช้งานใหม่</h3>
-          <p>ชื่อผู้ใช้งาน (Username): <b>${initialUsername}</b></p>
-          <p>อีเมลองค์กร: <b>${userEmail}</b></p>
-          <p>รหัสผ่านชั่วคราว: <b>1234</b></p>
-          <p style="color: #d9534f;">* แนะนำให้เปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก โดยกด "ลืมรหัสผ่าน" ที่หน้าเข้าสู่ระบบค่ะ</p>
-        </div>`,
-      name: "FMO IT Support"
-    });
-  }
+    ticketSheet.appendRow([
+      timestamp, req.name + " (ผู้ใช้ใหม่)", req.dept, "ขอเปิดสิทธิ์ครั้งแรก", req.system, req.detail, queueNum, req.email, "รอดำเนินการ", "", "", "", "", "", ""
+    ]);
 
-  const lineMsg = 
-    "✨ มีคำขอเปิดสิทธิ์ใหม่ (พนักงานใหม่)!\n" +
-    "🎫 ลำดับคิว: " + queueNum + "\n" +
-    "👤 ชื่อ-นามสกุล: " + req.name + "\n" +
-    "🏢 หน่วยงาน: " + req.dept + "\n" +
-    "🔑 ระบบที่ขอ: " + req.system + "\n" +
-    "📝 เหตุผล: " + req.detail;
-  sendLineAlert(lineMsg);
+    SpreadsheetApp.flush(); // บังคับบันทึกข้อมูลลงแผ่นชีททันที
+    lock.releaseLock();     // ปลดล็อกทันทีที่เขียนข้อมูลเรียบร้อย
+    hasLock = false;
 
-  const scriptUrl = ScriptApp.getService().getUrl();
-  const approveLink = scriptUrl + "?action=approve&email=" + encodeURIComponent(initialUsername);
-  if (req.manager_email) {
-    try {
+    if (req.email) {
       MailApp.sendEmail({
-        to: req.manager_email,
-        subject: `[ขออนุมัติ] พนักงานใหม่: คุณ ${req.name}`,
+        to: req.email,
+        subject: "ยินดีต้อนรับ! แจ้งข้อมูลการเข้าใช้งานระบบสารสนเทศ อสป.",
         htmlBody: `
           <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-            <h3 style="color: #0056b3;">แจ้งขออนุมัติสิทธิ์เข้าใช้งาน</h3>
-            <p>พนักงานใหม่: <b>${req.name}</b></p>
-            <p>ระบบที่ขอ: ${req.system}</p>
-            <hr>
-            <p>หากข้อมูลถูกต้อง โปรดคลิกปุ่มด้านล่างเพื่อยืนยัน:</p>
-            <div style="text-align: center; margin-top: 20px;">
-              <a href="${approveLink}" style="background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">✅ อนุมัติและยืนยันสิทธิ์</a>
-            </div>
-            <p style="font-size: 11px; color: #888; margin-top: 20px;">* ลิงก์นี้จะบันทึกวันเวลาที่ท่านอนุมัติลงในระบบโดยอัตโนมัติ</p>
+            <h3 style="color: #0056b3;">แจ้งข้อมูลบัญชีผู้ใช้งานใหม่</h3>
+            <p>ชื่อผู้ใช้งาน (Username): <b>${initialUsername}</b></p>
+            <p>อีเมลองค์กร: <b>${userEmail}</b></p>
+            <p>รหัสผ่านชั่วคราว: <b>1234</b></p>
+            <p style="color: #d9534f;">* แนะนำให้เปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก โดยกด "ลืมรหัสผ่าน" ที่หน้าเข้าสู่ระบบค่ะ</p>
           </div>`,
         name: "FMO IT Support"
       });
-    } catch (e) { console.error("Error: " + e.message); }
-  }
+    }
 
-  const tData = ticketSheet.getDataRange().getValues();
-  tData.shift();
-  const waitingCount = tData.filter(row => row[8] === "รอดำเนินการ").length;
-  return out({ status: 'success', queue: queueNum, waiting: waitingCount });
+    const lineMsg = 
+      "✨ มีคำขอเปิดสิทธิ์ใหม่ (พนักงานใหม่)!\n" +
+      "🎫 ลำดับคิว: " + queueNum + "\n" +
+      "👤 ชื่อ-นามสกุล: " + req.name + "\n" +
+      "🏢 หน่วยงาน: " + req.dept + "\n" +
+      "🔑 ระบบที่ขอ: " + req.system + "\n" +
+      "📝 เหตุผล: " + req.detail;
+    sendLineAlert(lineMsg);
+
+    const scriptUrl = ScriptApp.getService().getUrl();
+    const approveLink = scriptUrl + "?action=approve&email=" + encodeURIComponent(initialUsername);
+    if (req.manager_email) {
+      try {
+        MailApp.sendEmail({
+          to: req.manager_email,
+          subject: `[ขออนุมัติ] พนักงานใหม่: คุณ ${req.name}`,
+          htmlBody: `
+            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+              <h3 style="color: #0056b3;">แจ้งขออนุมัติสิทธิ์เข้าใช้งาน</h3>
+              <p>พนักงานใหม่: <b>${req.name}</b></p>
+              <p>ระบบที่ขอ: ${req.system}</p>
+              <hr>
+              <p>หากข้อมูลถูกต้อง โปรดคลิกปุ่มด้านล่างเพื่อยืนยัน:</p>
+              <div style="text-align: center; margin-top: 20px;">
+                <a href="${approveLink}" style="background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">✅ อนุมัติและยืนยันสิทธิ์</a>
+              </div>
+              <p style="font-size: 11px; color: #888; margin-top: 20px;">* ลิงก์นี้จะบันทึกวันเวลาที่ท่านอนุมัติลงในระบบโดยอัตโนมัติ</p>
+            </div>`,
+          name: "FMO IT Support"
+        });
+      } catch (e) { console.error("Error: " + e.message); }
+    }
+
+    const tData = ticketSheet.getDataRange().getValues();
+    tData.shift();
+    const waitingCount = tData.filter(row => row[8] === "รอดำเนินการ").length;
+    return out({ status: 'success', queue: queueNum, waiting: waitingCount });
+  } catch (error) {
+    return out({ status: 'error', message: 'เกิดข้อผิดพลาดหรือหมดเวลาล็อกคิว: ' + error.message });
+  } finally {
+    if (hasLock) {
+      lock.releaseLock();
+    }
+  }
 }
 
 // ฟังก์ชันสร้างตั๋วเคสแจ้งซ่อมใหม่
 function handleCreateTicket(ss, req) {
-  const ticketSheet = ss.getSheetByName(TICKET_SHEET);
-  const userSheet = ss.getSheetByName(USER_SHEET);
-  const now = new Date();
-  const timestamp = Utilities.formatDate(now, "GMT+7", "dd/MM/yyyy HH:mm:ss");
-  const queueNum = "Q-" + String(ticketSheet.getLastRow()).padStart(3, '0');
+  const lock = LockService.getScriptLock();
+  let hasLock = false;
+  try {
+    lock.waitLock(30000); // รอสูงสุด 30 วินาที
+    hasLock = true;
 
-  const userData = userSheet.getDataRange().getValues();
-  let thaiName = req.username;
-  for (let i = 1; i < userData.length; i++) {
-    if (String(userData[i][0]).trim() === String(req.username).trim()) {
-      thaiName = userData[i][2]; // คอลัมน์ C: ชื่อไทย
-      break;
+    const ticketSheet = ss.getSheetByName(TICKET_SHEET);
+    const userSheet = ss.getSheetByName(USER_SHEET);
+    const now = new Date();
+    const timestamp = Utilities.formatDate(now, "GMT+7", "dd/MM/yyyy HH:mm:ss");
+    const queueNum = "Q-" + String(ticketSheet.getLastRow()).padStart(3, '0');
+
+    const userData = userSheet.getDataRange().getValues();
+    let thaiName = req.username;
+    for (let i = 1; i < userData.length; i++) {
+      if (String(userData[i][0]).trim() === String(req.username).trim()) {
+        thaiName = userData[i][2]; // คอลัมน์ C: ชื่อไทย
+        break;
+      }
+    }
+
+    ticketSheet.appendRow([
+      timestamp, thaiName, "", req.type, req.system, req.detail, queueNum, req.email, "รอดำเนินการ", "", "", "", "", "", ""
+    ]);
+
+    SpreadsheetApp.flush(); // บังคับบันทึกข้อมูลลงแผ่นชีททันที
+    lock.releaseLock();     // ปลดล็อกทันที
+    hasLock = false;
+
+    const lineMsgRepair = 
+      "📌 มีแจ้งซ่อมใหม่จากระบบ IT Request!\n" +
+      "🎫 ลำดับคิว: " + queueNum + "\n" +
+      "👤 ผู้แจ้ง: " + thaiName + "\n" +
+      "🛠️ ประเภท: " + req.type + "\n" +
+      "💻 ระบบ: " + req.system + "\n" +
+      "📝 รายละเอียด: " + req.detail;
+    sendLineAlert(lineMsgRepair);
+
+    const tData = ticketSheet.getDataRange().getValues();
+    tData.shift();
+    const waitingCount = tData.filter(row => row[8] === "รอดำเนินการ").length;
+    return out({ status: 'success', queue: queueNum, waiting: waitingCount });
+  } catch (error) {
+    return out({ status: 'error', message: 'เกิดข้อผิดพลาดหรือหมดเวลาล็อกคิว: ' + error.message });
+  } finally {
+    if (hasLock) {
+      lock.releaseLock();
     }
   }
-
-  ticketSheet.appendRow([
-    timestamp, thaiName, "", req.type, req.system, req.detail, queueNum, req.email, "รอดำเนินการ", "", "", "", "", "", ""
-  ]);
-
-  const lineMsgRepair = 
-    "📌 มีแจ้งซ่อมใหม่จากระบบ IT Request!\n" +
-    "🎫 ลำดับคิว: " + queueNum + "\n" +
-    "👤 ผู้แจ้ง: " + thaiName + "\n" +
-    "🛠️ ประเภท: " + req.type + "\n" +
-    "💻 ระบบ: " + req.system + "\n" +
-    "📝 รายละเอียด: " + req.detail;
-  sendLineAlert(lineMsgRepair);
-
-  const tData = ticketSheet.getDataRange().getValues();
-  tData.shift();
-  const waitingCount = tData.filter(row => row[8] === "รอดำเนินการ").length;
-  return out({ status: 'success', queue: queueNum, waiting: waitingCount });
 }
 
 // ฟังก์ชันอัปเดตสถานะ (แอดมินรับงาน/ปิดงาน) พร้อมคำนวณ SLA
