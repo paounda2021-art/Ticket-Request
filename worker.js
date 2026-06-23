@@ -117,7 +117,7 @@ const HTML = `<!DOCTYPE html>
     <label>รายละเอียด <span class="required">*</span></label>
     <textarea id="user_detail" placeholder="อธิบายปัญหา..."></textarea>
     <label>อีเมลแจ้งเตือน <span class="required">*</span></label>
-    <input id="user_email" type="email" style="background-color:#e9ecef!important;cursor:not-allowed;" readonly>
+    <input id="user_email" type="email" style="background-color:#e9ecef;cursor:not-allowed;" readonly>
     <!-- ✅ FIX 3: ปุ่มส่งข้อมูล + รีเฟรช บรรทัดเดียวกัน -->
     <div style="display:flex;gap:10px;margin-bottom:10px;">
       <button class="btn-primary" id="btnSubmitUser" style="flex:1;margin-bottom:0!important;" onclick="submitUserRequest(event)">ส่งข้อมูล</button>
@@ -428,7 +428,11 @@ const JS = `let ticketDetailMap = {};
           const finalizeUserEntry = () => {
             document.getElementById('displayUser').innerText = currentUser;
             const loginName = u.trim();
-            document.getElementById('user_email').value = loginName.includes('@') ? loginName : loginName + '@fishmarket.co.th';
+            const emailInput = document.getElementById('user_email');
+            emailInput.value = loginName.includes('@') ? loginName : loginName + '@fishmarket.co.th';
+            emailInput.readOnly = true;
+            emailInput.style.backgroundColor = '#e9ecef';
+            emailInput.style.cursor = 'not-allowed';
             switchView('userBox');
             loadUserTickets();
           };
@@ -578,6 +582,10 @@ const JS = `let ticketDetailMap = {};
       if (res.status === 'success') {
         document.getElementById('user_system').value = '';
         document.getElementById('user_detail').value = '';
+        const currentLoginName = document.getElementById('username').value.trim();
+        if (currentLoginName) {
+          document.getElementById('user_email').value = currentLoginName.includes('@') ? currentLoginName : currentLoginName + '@fishmarket.co.th';
+        }
         loadUserTickets();
         const ahead = res.waiting ? res.waiting - 1 : 0;
         Swal.fire({
@@ -1149,7 +1157,15 @@ const JS = `let ticketDetailMap = {};
       const adminNameTxt = document.getElementById('displayAdmin').innerText;
       if (adminNameTxt) document.getElementById('displayUser').innerText = adminNameTxt;
       const adminLoginName = document.getElementById('username').value.trim();
-      if (adminLoginName) document.getElementById('user_email').value = adminLoginName.includes('@') ? adminLoginName : adminLoginName + '@fishmarket.co.th';
+      
+      const emailInput = document.getElementById('user_email');
+      if (adminLoginName) emailInput.value = adminLoginName.includes('@') ? adminLoginName : adminLoginName + '@fishmarket.co.th';
+      
+      // Admin can edit email address!
+      emailInput.readOnly = false;
+      emailInput.style.backgroundColor = '#ffffff';
+      emailInput.style.cursor = 'text';
+      
       loadUserTickets();
       if (btnToUser)  btnToUser.style.display  = 'none';
       if (btnToAdmin) { btnToAdmin.style.display = 'inline-block'; document.getElementById('switch-user-text').innerText = 'สลับ Admin'; }

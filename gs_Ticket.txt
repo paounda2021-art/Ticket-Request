@@ -287,10 +287,26 @@ function handleCreateTicket(ss, req) {
 
     const userData = userSheet.getDataRange().getValues();
     let thaiName = req.username;
+    
+    // ค้นหาชื่อจริงผู้แจ้งโดยอิงตามอีเมลแจ้งเตือนก่อน (รองรับเคสแอดมินแจ้งแทนผู้อื่น)
+    const targetEmailUser = String(req.email || "").trim().toLowerCase().replace('@fishmarket.co.th', '');
+    let foundUserByName = false;
     for (let i = 1; i < userData.length; i++) {
-      if (String(userData[i][0]).trim() === String(req.username).trim()) {
+      const storedUser = String(userData[i][0]).trim().toLowerCase().replace('@fishmarket.co.th', '');
+      if (storedUser === targetEmailUser) {
         thaiName = userData[i][2]; // คอลัมน์ C: ชื่อไทย
+        foundUserByName = true;
         break;
+      }
+    }
+    
+    // หากไม่พบจากอีเมล ให้ใช้ค่าจาก username ผู้ล็อกอิน
+    if (!foundUserByName) {
+      for (let i = 1; i < userData.length; i++) {
+        if (String(userData[i][0]).trim() === String(req.username).trim()) {
+          thaiName = userData[i][2]; // คอลัมน์ C: ชื่อไทย
+          break;
+        }
       }
     }
 

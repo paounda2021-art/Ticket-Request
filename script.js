@@ -122,7 +122,11 @@ let ticketDetailMap = {};
           const finalizeUserEntry = () => {
             document.getElementById('displayUser').innerText = currentUser;
             const loginName = u.trim();
-            document.getElementById('user_email').value = loginName.includes('@') ? loginName : loginName + '@fishmarket.co.th';
+            const emailInput = document.getElementById('user_email');
+            emailInput.value = loginName.includes('@') ? loginName : loginName + '@fishmarket.co.th';
+            emailInput.readOnly = true;
+            emailInput.style.backgroundColor = '#e9ecef';
+            emailInput.style.cursor = 'not-allowed';
             switchView('userBox');
             loadUserTickets();
           };
@@ -272,6 +276,10 @@ let ticketDetailMap = {};
       if (res.status === 'success') {
         document.getElementById('user_system').value = '';
         document.getElementById('user_detail').value = '';
+        const currentLoginName = document.getElementById('username').value.trim();
+        if (currentLoginName) {
+          document.getElementById('user_email').value = currentLoginName.includes('@') ? currentLoginName : currentLoginName + '@fishmarket.co.th';
+        }
         loadUserTickets();
         const ahead = res.waiting ? res.waiting - 1 : 0;
         Swal.fire({
@@ -843,7 +851,15 @@ let ticketDetailMap = {};
       const adminNameTxt = document.getElementById('displayAdmin').innerText;
       if (adminNameTxt) document.getElementById('displayUser').innerText = adminNameTxt;
       const adminLoginName = document.getElementById('username').value.trim();
-      if (adminLoginName) document.getElementById('user_email').value = adminLoginName.includes('@') ? adminLoginName : adminLoginName + '@fishmarket.co.th';
+      
+      const emailInput = document.getElementById('user_email');
+      if (adminLoginName) emailInput.value = adminLoginName.includes('@') ? adminLoginName : adminLoginName + '@fishmarket.co.th';
+      
+      // Admin can edit email address!
+      emailInput.readOnly = false;
+      emailInput.style.backgroundColor = '#ffffff';
+      emailInput.style.cursor = 'text';
+      
       loadUserTickets();
       if (btnToUser)  btnToUser.style.display  = 'none';
       if (btnToAdmin) { btnToAdmin.style.display = 'inline-block'; document.getElementById('switch-user-text').innerText = 'สลับ Admin'; }
