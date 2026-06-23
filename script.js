@@ -852,13 +852,11 @@ let ticketDetailMap = {};
     const btnToUser  = document.getElementById('switch-view-btn');
     const btnToAdmin = document.getElementById('switch-to-admin-btn');
     if (adminBox.classList.contains('hidden')) {
-      if (userBox)  userBox.classList.add('hidden');
-      if (adminBox) adminBox.classList.remove('hidden');
+      switchView('adminBox');
       if (btnToAdmin) btnToAdmin.style.display = 'none';
       if (btnToUser) { btnToUser.style.display = 'inline-block'; document.getElementById('switch-text').innerText = 'สลับ User'; }
     } else {
-      if (adminBox) adminBox.classList.add('hidden');
-      if (userBox)  userBox.classList.remove('hidden');
+      switchView('userBox');
       const adminNameTxt = document.getElementById('displayAdmin').innerText;
       if (adminNameTxt) document.getElementById('displayUser').innerText = adminNameTxt;
       const adminLoginName = document.getElementById('username').value.trim();
